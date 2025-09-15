@@ -672,7 +672,33 @@
                 
                 let query = supabaseClient.from('product').select(`*, productcategory(id, title), brand(id, title), supplierstock(*, profiles:supplieruserid(fullname)), productproperty(*, propertykey(*))`, { count: 'exact' });
                 
-                if (searchTerm) { query = query.ilike('title', `%${searchTerm}%`); }
+                if (searchTerm && appData.propertyKeys.length > 0) {
+                    const telegramKeyId = appData.propertyKeys.find(p => p.title === 'کد کالا (تلگرام)')?.id;
+                    let productIds = [];
+
+                    if (telegramKeyId) {
+                        const { data: matchingProperties } = await supabaseClient
+                            .from('productproperty')
+                            .select('productid')
+                            .eq('propertykeyid', telegramKeyId)
+                            .ilike('value', `%${searchTerm}%`)
+                            .limit(1000); 
+                        
+                        if (matchingProperties) {
+                            productIds = matchingProperties.map(p => p.productid);
+                        }
+                    }
+
+                    let orConditions = [`title.ilike.%${searchTerm}%`];
+                    if (productIds.length > 0) {
+                        orConditions.push(`id.in.(${productIds.join(',')})`);
+                    }
+                    query = query.or(orConditions.join(','));
+
+                } else if (searchTerm) {
+                    query = query.ilike('title', `%${searchTerm}%`);
+                }
+
                 if (categoryFilter) { query = query.eq('productcategoryid', categoryFilter); }
                 if (showNoSupplier) { query = query.is('supplierstock', null); }
 
@@ -688,7 +714,7 @@
                 else { setProducts(data || []); setTotalProducts(count || 0); }
                 
                 setIsLoading(false);
-            }, [currentPage, sortConfig, searchTerm, categoryFilter, showNoSupplier, itemsPerPage]);
+            }, [currentPage, sortConfig, searchTerm, categoryFilter, showNoSupplier, itemsPerPage, appData]);
 
 
             React.useEffect(() => { fetchBaseData(); }, []);
@@ -751,7 +777,7 @@
                         <div>
                              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-6">
                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-center">
-                                     <input type="text" placeholder="جستجوی نام محصول..." value={searchTerm} onChange={(e) => {setSearchTerm(e.target.value); setCurrentPage(1);}} className="lg:col-span-2 w-full p-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"/>
+                                     <input type="text" placeholder="جستجوی نام محصول یا کد تلگرام..." value={searchTerm} onChange={(e) => {setSearchTerm(e.target.value); setCurrentPage(1);}} className="lg:col-span-2 w-full p-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"/>
                                      <select value={categoryFilter} onChange={e => {setCategoryFilter(e.target.value); setCurrentPage(1);}} className="w-full p-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg">
                                          <option value="">همه دسته‌بندی‌ها</option>
                                          {appData.categories.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
