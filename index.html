@@ -23,15 +23,6 @@
             },
         }
     </script>
-    
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-    <script src="https://cdn.jsdelivr.net/npm/jalaali-js/dist/jalaali.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap');
@@ -87,6 +78,12 @@
 </head>
 <body class="bg-gray-100 dark:bg-gray-900">
     <div id="root"></div>
+
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jalaali-js/dist/jalaali.js"></script>
 
     <script type="text/babel">
         // ==================================================
@@ -672,32 +669,34 @@
                 
                 let query = supabaseClient.from('product').select(`*, productcategory(id, title), brand(id, title), supplierstock(*, profiles:supplieruserid(fullname)), productproperty(*, propertykey(*))`, { count: 'exact' });
                 
-                if (searchTerm && appData.propertyKeys.length > 0) {
-                    const telegramKeyId = appData.propertyKeys.find(p => p.title === 'کد کالا (تلگرام)')?.id;
-                    let productIds = [];
+                if (searchTerm) {
+                    let orConditions = [`title.ilike.%${searchTerm}%`];
 
-                    if (telegramKeyId) {
-                        const { data: matchingProperties } = await supabaseClient
-                            .from('productproperty')
-                            .select('productid')
-                            .eq('propertykeyid', telegramKeyId)
-                            .ilike('value', `%${searchTerm}%`)
-                            .limit(1000); 
-                        
-                        if (matchingProperties) {
-                            productIds = matchingProperties.map(p => p.productid);
+                    // Check if search term is a number for Product ID (کد بازاریو) search
+                    if (!isNaN(searchTerm) && searchTerm.trim() !== '') {
+                        orConditions.push(`id.eq.${parseInt(searchTerm.trim(), 10)}`);
+                    }
+
+                    // Search by Telegram Code
+                    if (appData.propertyKeys.length > 0) {
+                        const telegramKeyId = appData.propertyKeys.find(p => p.title === 'کد کالا (تلگرام)')?.id;
+                        if (telegramKeyId) {
+                            const { data: matchingProperties } = await supabaseClient
+                                .from('productproperty')
+                                .select('productid')
+                                .eq('propertykeyid', telegramKeyId)
+                                .ilike('value', `%${searchTerm}%`);
+                            
+                            if (matchingProperties && matchingProperties.length > 0) {
+                                const productIds = matchingProperties.map(p => p.productid);
+                                orConditions.push(`id.in.(${productIds.join(',')})`);
+                            }
                         }
                     }
-
-                    let orConditions = [`title.ilike.%${searchTerm}%`];
-                    if (productIds.length > 0) {
-                        orConditions.push(`id.in.(${productIds.join(',')})`);
-                    }
+                    
                     query = query.or(orConditions.join(','));
-
-                } else if (searchTerm) {
-                    query = query.ilike('title', `%${searchTerm}%`);
                 }
+
 
                 if (categoryFilter) { query = query.eq('productcategoryid', categoryFilter); }
                 if (showNoSupplier) { query = query.is('supplierstock', null); }
@@ -777,7 +776,7 @@
                         <div>
                              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-6">
                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-center">
-                                     <input type="text" placeholder="جستجوی نام محصول یا کد تلگرام..." value={searchTerm} onChange={(e) => {setSearchTerm(e.target.value); setCurrentPage(1);}} className="lg:col-span-2 w-full p-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"/>
+                                     <input type="text" placeholder="جستجوی کد بازاریو، نام محصول یا کد تلگرام..." value={searchTerm} onChange={(e) => {setSearchTerm(e.target.value); setCurrentPage(1);}} className="lg:col-span-2 w-full p-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg"/>
                                      <select value={categoryFilter} onChange={e => {setCategoryFilter(e.target.value); setCurrentPage(1);}} className="w-full p-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg">
                                          <option value="">همه دسته‌بندی‌ها</option>
                                          {appData.categories.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
