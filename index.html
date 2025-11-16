@@ -16,7 +16,7 @@
                     },
                     keyframes: {
                         shimmer: {
-                          '100%': { transform: 'translateX(100%)' },
+                            '100%': { transform: 'translateX(100%)' },
                         },
                     },
                 },
@@ -436,12 +436,17 @@
                         <div>
                             <h3 className="text-lg font-semibold mb-2">موجودی تامین‌کنندگان</h3>
                             <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                                {suppliers.length > 0 ? suppliers.map(stock => (
-                                    <div key={stock.supplieruserid} className="p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg flex flex-col sm:flex-row justify-between sm:items-center gap-2">
-                                        <span className="font-semibold">{stock.profiles?.fullname || 'نامشخص'}</span>
-                                        <div className="flex flex-col sm:flex-row sm:gap-4 text-sm sm:text-right">
-                                            <span>قیمت: <span className="font-mono">{stock.unitprice ? `${stock.unitprice.toLocaleString('fa-IR')} تومان` : '-'}</span></span>
-                                            <span>تعداد: <span className="font-mono">{stock.quantity ?? 'نامحدود'}</span></span>
+                                {suppliers.length > 0 ? suppliers.map((stock, index) => (
+                                    <div key={`${stock.supplieruserid}-${stock.locationid || index}`} className="p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                                        {/* Left side: Location ID */}
+                                        <div>
+                                            <span className="text-xs text-gray-500 dark:text-gray-400">شناسه انبار</span>
+                                            <p className="font-mono font-semibold">{stock.location ? `${stock.location.id}` : (stock.locationid ? stock.locationid : 'نامشخص')}</p>
+                                        </div>
+                                        {/* Right side: Price */}
+                                        <div className="text-left sm:text-right">
+                                            <span className="text-xs text-gray-500 dark:text-gray-400">قیمت</span>
+                                            <p className="font-mono font-semibold">{stock.unitprice ? `${stock.unitprice.toLocaleString('fa-IR')} تومان` : '-'}</p>
                                         </div>
                                     </div>
                                 )) : (
@@ -790,7 +795,7 @@
             const fetchProducts = React.useCallback(async () => {
                 setIsLoading(true);
                 
-                let query = supabaseClient.from('product').select(`*, productcategory(id, title), brand(id, title), supplierstock(*, profiles:supplieruserid(fullname)), productproperty(*, propertykey(*))`, { count: 'exact' });
+                let query = supabaseClient.from('product').select(`*, productcategory(id, title), brand(id, title), supplierstock(*, profiles:supplieruserid(fullname), location(id)), productproperty(*, propertykey(*))`, { count: 'exact' });
                 
                 if (searchTerm) {
                     let orConditions = [`title.ilike.%${searchTerm}%`];
@@ -898,6 +903,7 @@
                             <TabButton tabName="products" currentTab={activeTab} setTab={setActiveTab}>محصولات</TabButton>
                             <TabButton tabName="categories" currentTab={activeTab} setTab={setActiveTab}>دسته‌بندی‌ها</TabButton>
                             <TabButton tabName="brands" currentTab={activeTab} setTab={setActiveTab}>برندها</TabButton>
+
                             <TabButton tabName="attributes" currentTab={activeTab} setTab={setActiveTab}>ویژگی‌ها</TabButton>
                         </nav>
                     </div>
