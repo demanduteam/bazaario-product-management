@@ -211,10 +211,12 @@
 
         const ProductForm = ({ isOpen, onClose, onSave, product, appData }) => {
             const { categories, brands } = appData;
-            const initialFormData = { title: '', productcategoryid: '', brandid: '' };
+            const initialFormData = { title: '', productcategoryid: '', brandid: '', image_url: '' };
             const [formData, setFormData] = React.useState(initialFormData);
             const [properties, setProperties] = React.useState([]);
             const [propertyValues, setPropertyValues] = React.useState({});
+            const [imageFile, setImageFile] = React.useState(null);
+            const [imagePreview, setImagePreview] = React.useState(null);
             const [isLoading, setIsLoading] = React.useState(false);
             const [error, setError] = React.useState('');
 
@@ -223,12 +225,18 @@
                     setError('');
                     setProperties([]);
                     setPropertyValues({});
+                    setImageFile(null);
+                    setImagePreview(null);
                     if (product) {
                         setFormData({
                             title: product.title || '',
                             productcategoryid: product.productcategoryid || '',
-                            brandid: product.brandid || ''
+                            brandid: product.brandid || '',
+                            image_url: product.image_url || ''
                         });
+                        if (product.image_url) {
+                            setImagePreview(product.image_url);
+                        }
                         if(product.productcategoryid) {
                             fetchCategoryProperties(product.productcategoryid);
                         }
@@ -282,6 +290,32 @@
                 setFormData(prev => ({ ...prev, [name]: value }));
             };
 
+            const handleImageChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    setImageFile(file);
+                    setImagePreview(URL.createObjectURL(file));
+                }
+            };
+
+            const uploadImage = async (file) => {
+                const fileExt = file.name.split('.').pop();
+                const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+                const filePath = `${fileName}`;
+
+                const { error: uploadError } = await supabaseClient.storage
+                    .from('product-images')
+                    .upload(filePath, file);
+
+                if (uploadError) throw uploadError;
+
+                const { data: { publicUrl } } = supabaseClient.storage
+                    .from('product-images')
+                    .getPublicUrl(filePath);
+
+                return publicUrl;
+            };
+
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 if (!formData.title || !formData.productcategoryid) {
@@ -291,13 +325,21 @@
                 setIsLoading(true);
                 setError('');
                 
-                const productData = {
-                    title: formData.title,
-                    productcategoryid: formData.productcategoryid,
-                    brandid: formData.brandid || null,
-                };
-
                 try {
+                    let imageUrl = formData.image_url;
+
+                    // Upload image if new file selected
+                    if (imageFile) {
+                        imageUrl = await uploadImage(imageFile);
+                    }
+
+                    const productData = {
+                        title: formData.title,
+                        productcategoryid: formData.productcategoryid,
+                        brandid: formData.brandid || null,
+                        image_url: imageUrl
+                    };
+
                     let productId;
                     if (product) { // Update
                         const { data, error } = await supabaseClient.from('product').update(productData).eq('id', product.id).select().single();
@@ -339,6 +381,33 @@
             return (
                 <Modal isOpen={isOpen} onClose={onClose} title={product ? 'ویرایش محصول' : 'افزودن محصول جدید'}>
                     <form onSubmit={handleSubmit} className="space-y-4">
+                        <div className="flex flex-col items-center mb-4">
+                            <label className="block w-full text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">تصویر محصول</label>
+                            <div className="w-full flex items-center gap-4">
+                                <div className="h-24 w-24 bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center border border-gray-300 dark:border-gray-600">
+                                    {imagePreview ? (
+                                        <img src={imagePreview} alt="Preview" className="h-full w-full object-cover" />
+                                    ) : (
+                                        <span className="text-gray-400 text-xs text-center px-1">بدون تصویر</span>
+                                    )}
+                                </div>
+                                <div className="flex-1">
+                                    <input 
+                                        type="file" 
+                                        accept="image/*"
+                                        onChange={handleImageChange}
+                                        className="w-full text-sm text-gray-500
+                                        file:mr-4 file:py-2 file:px-4
+                                        file:rounded-full file:border-0
+                                        file:text-sm file:font-semibold
+                                        file:bg-indigo-50 file:text-indigo-700
+                                        hover:file:bg-indigo-100 dark:file:bg-gray-700 dark:file:text-indigo-300"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">فرمت‌های مجاز: JPG, PNG. حداکثر 100 KB.</p>
+                                </div>
+                            </div>
+                        </div>
+
                         <div>
                             <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">نام محصول</label>
                             <input type="text" name="title" value={formData.title} onChange={handleChange} className="w-full bg-gray-100 dark:bg-gray-700 p-2 rounded-lg" required />
@@ -404,18 +473,38 @@
             return (
                 <Modal isOpen={isOpen} onClose={onClose} title={`جزئیات محصول: ${product.title}`}>
                     <div className="space-y-6">
-                        <div className="p-4 bg-gray-100 dark:bg-gray-700/50 rounded-lg grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <div>
-                                <h4 className="text-xs text-gray-500 dark:text-gray-400">نام محصول</h4>
-                                <p className="font-semibold">{product.title}</p>
+                        <div className="flex flex-col md:flex-row gap-6">
+                            {/* Image Section */}
+                            <div className="w-full md:w-1/3 flex justify-center">
+                                <div className="w-full max-w-[200px] aspect-square rounded-xl bg-white p-2 border border-gray-200 dark:border-gray-700 flex items-center justify-center overflow-hidden">
+                                    {product.image_url ? (
+                                        <img src={product.image_url} alt={product.title} className="w-full h-full object-contain" />
+                                    ) : (
+                                        <div className="text-gray-400 text-4xl">📷</div>
+                                    )}
+                                </div>
                             </div>
-                            <div>
-                                <h4 className="text-xs text-gray-500 dark:text-gray-400">برند</h4>
-                                <p className="font-semibold">{product.brand?.title || '-'}</p>
-                            </div>
-                            <div>
-                                <h4 className="text-xs text-gray-500 dark:text-gray-400">دسته‌بندی</h4>
-                                <p className="font-semibold">{product.productcategory?.title || '-'}</p>
+
+                            {/* Info Section */}
+                            <div className="w-full md:w-2/3">
+                                <div className="p-4 bg-gray-100 dark:bg-gray-700/50 rounded-lg grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <h4 className="text-xs text-gray-500 dark:text-gray-400">نام محصول</h4>
+                                        <p className="font-semibold">{product.title}</p>
+                                    </div>
+                                    <div>
+                                        <h4 className="text-xs text-gray-500 dark:text-gray-400">شناسه (ID)</h4>
+                                        <p className="font-mono">{product.id}</p>
+                                    </div>
+                                    <div>
+                                        <h4 className="text-xs text-gray-500 dark:text-gray-400">برند</h4>
+                                        <p className="font-semibold">{product.brand?.title || '-'}</p>
+                                    </div>
+                                    <div>
+                                        <h4 className="text-xs text-gray-500 dark:text-gray-400">دسته‌بندی</h4>
+                                        <p className="font-semibold">{product.productcategory?.title || '-'}</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -438,12 +527,10 @@
                             <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
                                 {suppliers.length > 0 ? suppliers.map((stock, index) => (
                                     <div key={`${stock.supplieruserid}-${stock.locationid || index}`} className="p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg flex flex-col sm:flex-row justify-between sm:items-center gap-2">
-                                        {/* Left side: Location ID */}
                                         <div>
                                             <span className="text-xs text-gray-500 dark:text-gray-400">شناسه انبار</span>
                                             <p className="font-mono font-semibold">{stock.location ? `${stock.location.id}` : (stock.locationid ? stock.locationid : 'نامشخص')}</p>
                                         </div>
-                                        {/* Right side: Price */}
                                         <div className="text-left sm:text-right">
                                             <span className="text-xs text-gray-500 dark:text-gray-400">قیمت</span>
                                             <p className="font-mono font-semibold">{stock.unitprice ? `${stock.unitprice.toLocaleString('fa-IR')} تومان` : '-'}</p>
@@ -709,17 +796,25 @@
             return (
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 space-y-4">
                     {/* Header: Title and ID */}
-                    <div className="flex justify-between items-start gap-2">
-                        <h3 className="font-semibold text-base sm:text-lg">{product.title}</h3>
-                        <span className="text-sm font-mono text-gray-500 dark:text-gray-400 flex-shrink-0">#{product.id}</span>
+                    <div className="flex gap-3">
+                         <div className="h-16 w-16 bg-gray-100 dark:bg-gray-700 rounded-md overflow-hidden flex-shrink-0 border border-gray-200 dark:border-gray-600">
+                             {product.image_url ? (
+                                <img src={product.image_url} alt={product.title} className="w-full h-full object-cover" />
+                             ) : (
+                                <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">بدون تصویر</div>
+                             )}
+                        </div>
+                        <div className="flex-grow">
+                             <div className="flex justify-between items-start gap-2">
+                                <h3 className="font-semibold text-base sm:text-lg line-clamp-1">{product.title}</h3>
+                                <span className="text-sm font-mono text-gray-500 dark:text-gray-400 flex-shrink-0">#{product.id}</span>
+                            </div>
+                            <div className="text-sm text-gray-500 mt-1">{product.productcategory?.title}</div>
+                        </div>
                     </div>
 
                     {/* Details Grid */}
                     <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                        <div>
-                            <div className="text-gray-500 dark:text-gray-400 text-xs">دسته‌بندی</div>
-                            <div className="font-medium">{product.productcategory?.title || '-'}</div>
-                        </div>
                         <div>
                             <div className="text-gray-500 dark:text-gray-400 text-xs">برند</div>
                             <div className="font-medium">{product.brand?.title || '-'}</div>
@@ -728,9 +823,9 @@
                             <div className="text-gray-500 dark:text-gray-400 text-xs">کد تلگرام</div>
                             <div className="font-medium font-mono">{telegramCode}</div>
                         </div>
-                        <div>
+                        <div className="col-span-2">
                             <div className="text-gray-500 dark:text-gray-400 text-xs">وضعیت تامین</div>
-                            <div className="font-medium">
+                            <div className="font-medium mt-1">
                                 {product.supplierstock.length > 0 ? 
                                     <span className="px-2 py-1 text-xs rounded-full bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-200">دارد</span> :
                                     <span className="px-2 py-1 text-xs rounded-full bg-yellow-200 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">ندارد</span>
@@ -929,6 +1024,7 @@
                                 <table className="w-full text-right min-w-[800px]">
                                     <thead>
                                         <tr className="border-b border-gray-200 dark:border-gray-700">
+                                            <th className="p-3 w-16">تصویر</th>
                                             <SortableHeader columnKey="id">کد بازاریو</SortableHeader>
                                             <SortableHeader columnKey="title">نام محصول</SortableHeader>
                                             <th className="p-3">کد تلگرام</th>
@@ -942,12 +1038,17 @@
                                     {isLoading ? <TableSkeleton /> : (
                                         <tbody>
                                             {products.length === 0 ? (
-                                                <tr><td colSpan="8" className="text-center p-4">محصولی با این فیلترها یافت نشد.</td></tr>
+                                                <tr><td colSpan="9" className="text-center p-4">محصولی با این فیلترها یافت نشد.</td></tr>
                                             ) : (
                                                 products.map(product => {
                                                     const telegramCode = product.productproperty.find(p => p.propertykey?.title === 'کد کالا (تلگرام)')?.value || '-';
                                                     return (
                                                         <tr key={product.id} className={`border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50`}>
+                                                            <td className="p-3">
+                                                                <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-md overflow-hidden border border-gray-200 dark:border-gray-600">
+                                                                    {product.image_url && <img src={product.image_url} alt="" className="w-full h-full object-cover" />}
+                                                                </div>
+                                                            </td>
                                                             <td className="p-3 font-mono">{product.id}</td>
                                                             <td className="p-3 font-semibold">{product.title}</td>
                                                             <td className="p-3 font-mono">{telegramCode}</td>
