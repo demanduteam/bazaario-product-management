@@ -473,7 +473,7 @@
             const [stockForm, setStockForm] = React.useState({ compositeId: '', unitprice: '', quantity: '' });
             const [isSubmittingStock, setIsSubmittingStock] = React.useState(false);
             const [stockError, setStockError] = React.useState('');
-            const [isUpdatingRow, setIsUpdatingRow] = React.useState(null); // NEW: Track which row is updating
+            const [isUpdatingRow, setIsUpdatingRow] = React.useState(null);
 
             React.useEffect(() => {
                 if (isOpen && product) {
@@ -550,7 +550,6 @@
                     }).select('*, location(id), profiles:supplieruserid(fullname)').single();
 
                     if (error) {
-                        // Handle unique constraint or other db errors nicely
                         if (error.code === '23505') {
                             throw new Error("این محصول از قبل در انبار انتخابی وجود دارد. لطفاً از لیست پایین برای ویرایش استفاده کنید.");
                         }
@@ -573,7 +572,6 @@
                 }
             };
 
-            // NEW: Handler for inline input change
             const handleStockChange = (index, field, value) => {
                 const newSuppliers = [...localSuppliers];
                 newSuppliers[index][field] = value === '' ? null : Number(value);
@@ -581,7 +579,6 @@
                 setLocalSuppliers(newSuppliers);
             };
 
-            // NEW: Handler to save inline edit to Supabase
             const handleUpdateStock = async (index) => {
                 const stock = localSuppliers[index];
                 setIsUpdatingRow(index);
@@ -598,9 +595,9 @@
                     if (error) throw error;
                     
                     const newSuppliers = [...localSuppliers];
-                    newSuppliers[index].isDirty = false; // Turn off dirty flag to hide button
+                    newSuppliers[index].isDirty = false;
                     setLocalSuppliers(newSuppliers);
-                    if(onSave) onSave(); // Refresh parent table in background
+                    if(onSave) onSave();
                 } catch (err) {
                     console.error("Update error:", err);
                     alert('خطا در بروزرسانی: ' + err.message);
@@ -691,11 +688,21 @@
                                         </div>
                                         <div className="sm:col-span-2">
                                             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">قیمت (تومان)</label>
-                                            <input type="number" required min="0" className="w-full p-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" value={stockForm.unitprice} onChange={e => setStockForm({...stockForm, unitprice: e.target.value})} />
+                                            <input 
+                                                type="text" 
+                                                dir="ltr"
+                                                required 
+                                                className="w-full p-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-left font-mono" 
+                                                value={stockForm.unitprice !== '' && stockForm.unitprice != null ? Number(stockForm.unitprice).toLocaleString() : ''} 
+                                                onChange={e => {
+                                                    const raw = e.target.value.replace(/\D/g, '');
+                                                    setStockForm({...stockForm, unitprice: raw});
+                                                }} 
+                                            />
                                         </div>
                                         <div>
                                             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">تعداد</label>
-                                            <input type="number" required min="0" className="w-full p-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" value={stockForm.quantity} onChange={e => setStockForm({...stockForm, quantity: e.target.value})} />
+                                            <input type="number" required min="0" className="w-full p-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-left font-mono" dir="ltr" value={stockForm.quantity} onChange={e => setStockForm({...stockForm, quantity: e.target.value})} />
                                         </div>
                                     </div>
                                     {stockError && <p className="text-red-500 text-xs mt-2">{stockError}</p>}
@@ -722,11 +729,14 @@
                                             <div className="flex-1 sm:flex-initial">
                                                 <span className="text-xs text-gray-500 dark:text-gray-400 block mb-0.5">قیمت (تومان)</span>
                                                 <input 
-                                                    type="number" 
-                                                    min="0"
-                                                    className="w-full sm:w-28 p-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 focus:ring-1 focus:ring-indigo-500" 
-                                                    value={stock.unitprice || ''} 
-                                                    onChange={e => handleStockChange(index, 'unitprice', e.target.value)} 
+                                                    type="text" 
+                                                    dir="ltr"
+                                                    className="w-full sm:w-32 p-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 focus:ring-1 focus:ring-indigo-500 text-left font-mono" 
+                                                    value={stock.unitprice != null ? Number(stock.unitprice).toLocaleString() : ''} 
+                                                    onChange={e => {
+                                                        const raw = e.target.value.replace(/\D/g, '');
+                                                        handleStockChange(index, 'unitprice', raw);
+                                                    }} 
                                                 />
                                             </div>
                                             <div className="flex-1 sm:flex-initial">
@@ -734,7 +744,8 @@
                                                 <input 
                                                     type="number" 
                                                     min="0"
-                                                    className="w-full sm:w-20 p-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 focus:ring-1 focus:ring-indigo-500" 
+                                                    className="w-full sm:w-20 p-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 focus:ring-1 focus:ring-indigo-500 text-left font-mono" 
+                                                    dir="ltr"
                                                     value={stock.quantity || ''} 
                                                     onChange={e => handleStockChange(index, 'quantity', e.target.value)} 
                                                 />
