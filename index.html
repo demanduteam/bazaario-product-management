@@ -724,6 +724,9 @@
                                             <p className="font-semibold text-sm">
                                                 کد انبار: <span className="font-mono text-indigo-600 dark:text-indigo-400">{stock.location ? stock.location.id : (stock.location_id || stock.locationid || 'نامشخص')}</span>
                                             </p>
+                                            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                                                تاریخ: <span className="font-mono">{toJalaali(stock.lastupdatedat)}</span>
+                                            </p>
                                         </div>
                                         <div className="flex flex-wrap sm:flex-nowrap gap-3 items-end sm:text-right w-full sm:w-auto">
                                             <div className="flex-1 sm:flex-initial">
