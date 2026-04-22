@@ -1247,8 +1247,7 @@
                                                 <div className="font-semibold line-clamp-1">{upd.product?.title || 'نامشخص'}</div>
                                             </td>
                                             <td className="p-3">
-                                                <div className="text-xs text-gray-500">کد: {upd.location?.id || upd.location_id}</div>
-                                                <div className="font-medium">{upd.profiles?.fullname || 'نامشخص'}</div>
+                                                <div className="font-medium">انبار (کد: {upd.location?.id || upd.location_id || '-'})</div>
                                             </td>
                                             <td className="p-3 font-mono">{upd.unitprice ? Number(upd.unitprice).toLocaleString() : '-'}</td>
                                             <td className="p-3 font-mono text-center">{upd.quantity != null ? upd.quantity : '-'}</td>
