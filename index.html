@@ -1238,8 +1238,8 @@
                                 ) : updates.length === 0 ? (
                                     <tr><td colSpan="6" className="p-6 text-center text-gray-500">هیچ به‌روزرسانی در این تاریخ یافت نشد.</td></tr>
                                 ) : (
-                                    updates.map(upd => (
-                                        <tr key={upd.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                    updates.map((upd, index) => (
+                                        <tr key={upd.id || index} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                             <td className="p-3 flex items-center gap-3">
                                                 <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-md overflow-hidden border border-gray-200 dark:border-gray-600 flex items-center justify-center flex-shrink-0">
                                                     {upd.product?.image_url ? <img src={upd.product.image_url} alt="" className="w-full h-full object-cover" /> : <span className="text-[10px] text-gray-400">ندارد</span>}
