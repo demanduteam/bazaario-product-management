@@ -121,9 +121,8 @@
         const supabaseClient = createClient(supabaseUrl, supabaseKey);
 
         // ==================================================
-        // Utilities & Shared Components
+        // Helper Functions
         // ==================================================
-
         const toEnglishDigits = (str) => {
             if (!str) return '';
             return str.toString()
@@ -180,7 +179,9 @@
             return fname || lname || 'کاربر بدون نام';
         };
 
-        // --- Toast Provider Setup ---
+        // ==================================================
+        // Shared UI Components
+        // ==================================================
         const ToastContext = React.createContext();
         const ToastProvider = ({ children }) => {
             const [toasts, setToasts] = React.useState([]);
@@ -211,7 +212,6 @@
             );
         };
         const useToasts = () => React.useContext(ToastContext);
-
 
         const Modal = ({ isOpen, onClose, title, children }) => {
             if (!isOpen) return null;
@@ -413,8 +413,224 @@
             </div>
         );
 
+        // ==================================================
+        // Admin Generic Managers
+        // ==================================================
+        const GenericManager = ({ onSave, title, tableName, items, confirmModal, onManageAttributes, attributeLabel }) => {
+            const { addToast } = useToasts();
+            const [newItemTitle, setNewItemTitle] = React.useState('');
+            const [isSubmitting, setIsSubmitting] = React.useState(false);
+            const [editingItem, setEditingItem] = React.useState(null);
+            const [editTitle, setEditTitle] = React.useState('');
+
+            const handleAdd = async (e) => {
+                e.preventDefault();
+                if (!newItemTitle.trim()) return;
+                setIsSubmitting(true);
+                try {
+                    const { error } = await supabaseClient.from(tableName).insert({ title: newItemTitle.trim() });
+                    if (error) throw error;
+                    addToast(`${title} با موفقیت اضافه شد.`, 'success');
+                    setNewItemTitle('');
+                    onSave();
+                } catch (err) {
+                    addToast(`خطا در افزودن ${title}`, 'error');
+                } finally {
+                    setIsSubmitting(false);
+                }
+            };
+
+            const handleDelete = (item) => {
+                confirmModal({
+                    isOpen: true,
+                    message: `آیا از حذف "${item.title}" اطمینان دارید؟`,
+                    onConfirm: async () => {
+                        confirmModal({ isOpen: false });
+                        try {
+                            const { error } = await supabaseClient.from(tableName).delete().eq('id', item.id);
+                            if (error) throw error;
+                            addToast(`${title} با موفقیت حذف شد.`, 'success');
+                            onSave();
+                        } catch (err) {
+                            addToast(`خطا در حذف ${title}. ممکن است اطلاعات وابسته‌ای وجود داشته باشد.`, 'error');
+                        }
+                    }
+                });
+            };
+
+            const handleUpdate = async () => {
+                if (!editTitle.trim()) return;
+                setIsSubmitting(true);
+                try {
+                    const { error } = await supabaseClient.from(tableName).update({ title: editTitle.trim() }).eq('id', editingItem.id);
+                    if (error) throw error;
+                    addToast(`${title} با موفقیت ویرایش شد.`, 'success');
+                    setEditingItem(null);
+                    onSave();
+                } catch (err) {
+                    addToast(`خطا در ویرایش ${title}`, 'error');
+                } finally {
+                    setIsSubmitting(false);
+                }
+            };
+
+            return (
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+                        <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        مدیریت {title}‌ها
+                    </h3>
+                    <form onSubmit={handleAdd} className="flex gap-2 mb-6">
+                        <input type="text" value={newItemTitle} onChange={e => setNewItemTitle(e.target.value)} placeholder={`نام ${title} جدید...`} className="flex-1 p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:outline-none focus:ring-indigo-500 transition-shadow text-gray-900 dark:text-gray-100" required />
+                        <button type="submit" disabled={isSubmitting} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-semibold disabled:opacity-50 transition-colors flex items-center gap-2">
+                            {isSubmitting && <div className="spinner !w-3 !h-3 !border-t-white"></div>}
+                            افزودن
+                        </button>
+                    </form>
+
+                    <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                        <table className="w-full text-right text-sm whitespace-nowrap">
+                            <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300">
+                                <tr>
+                                    <th className="p-3 w-16 text-center border-b border-gray-200 dark:border-gray-700">شناسه</th>
+                                    <th className="p-3 border-b border-gray-200 dark:border-gray-700">عنوان {title}</th>
+                                    <th className="p-3 text-center border-b border-gray-200 dark:border-gray-700">عملیات</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200 dark:divide-gray-700 text-gray-800 dark:text-gray-200">
+                                {items.length === 0 ? (
+                                    <tr><td colSpan="3" className="text-center p-6 text-gray-500">هیچ {title}ی یافت نشد.</td></tr>
+                                ) : (
+                                    items.map(item => (
+                                        <tr key={item.id} className="hover:bg-gray-50/80 dark:hover:bg-gray-700/30 transition-colors">
+                                            <td className="p-3 font-mono text-center text-gray-500 dark:text-gray-400">{item.id}</td>
+                                            <td className="p-3 font-semibold">
+                                                {editingItem?.id === item.id ? (
+                                                    <input type="text" value={editTitle} onChange={e => setEditTitle(e.target.value)} className="w-full p-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500" autoFocus />
+                                                ) : item.title}
+                                            </td>
+                                            <td className="p-3 flex justify-center items-center gap-2">
+                                                {editingItem?.id === item.id ? (
+                                                    <>
+                                                        <button onClick={handleUpdate} className="text-green-600 bg-green-50 hover:bg-green-100 dark:bg-green-900/30 dark:hover:bg-green-900/50 dark:text-green-400 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors border border-green-200 dark:border-green-800/50">ثبت تغییرات</button>
+                                                        <button onClick={() => setEditingItem(null)} className="text-gray-600 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-300 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors border border-gray-200 dark:border-gray-600">لغو</button>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <button onClick={() => { setEditingItem(item); setEditTitle(item.title); }} className="text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/30 px-2 py-1.5 rounded transition-colors text-xs font-semibold">ویرایش</button>
+                                                        {onManageAttributes && (
+                                                            <button onClick={() => onManageAttributes(item)} className="text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 px-2 py-1.5 rounded transition-colors text-xs font-semibold">{attributeLabel}</button>
+                                                        )}
+                                                        <button onClick={() => handleDelete(item)} className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 px-2 py-1.5 rounded transition-colors text-xs font-semibold">حذف</button>
+                                                    </>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        };
+
+        const AssignAttributesModal = ({ isOpen, onClose, category, allAttributes, onSave }) => {
+            const { addToast } = useToasts();
+            const [selectedAttributes, setSelectedAttributes] = React.useState([]);
+            const [isLoading, setIsLoading] = React.useState(false);
+            const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+            React.useEffect(() => {
+                if (isOpen && category) {
+                    const fetchCurrentAttributes = async () => {
+                        setIsLoading(true);
+                        const { data, error } = await supabaseClient
+                            .from('category_propertykey')
+                            .select('propertykey_id, propertykeyid')
+                            .eq('category_id', category.id);
+                        
+                        if (!error && data) {
+                            setSelectedAttributes(data.map(d => d.propertykey_id || d.propertykeyid));
+                        }
+                        setIsLoading(false);
+                    };
+                    fetchCurrentAttributes();
+                }
+            }, [isOpen, category]);
+
+            const handleToggle = (id) => {
+                setSelectedAttributes(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setIsSubmitting(true);
+                try {
+                    // Assuming standard relation structure; clearing old mappings first
+                    await supabaseClient.from('category_propertykey').delete().eq('category_id', category.id);
+                    
+                    if (selectedAttributes.length > 0) {
+                        const inserts = selectedAttributes.map(id => ({
+                            category_id: category.id,
+                            propertykey_id: id 
+                        }));
+                        const { error } = await supabaseClient.from('category_propertykey').insert(inserts);
+                        if (error) throw error;
+                    }
+                    addToast('ویژگی‌ها با موفقیت بروزرسانی شدند.', 'success');
+                    onSave();
+                    onClose();
+                } catch (error) {
+                    console.error(error);
+                    addToast('خطا در بروزرسانی ویژگی‌ها.', 'error');
+                } finally {
+                    setIsSubmitting(false);
+                }
+            };
+
+            if (!isOpen || !category) return null;
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title={`ویژگی‌های دسته‌بندی: ${category.title}`}>
+                    {isLoading ? <div className="py-12 flex justify-center"><div className="spinner !w-8 !h-8 !border-t-indigo-600 border-[3px]"></div></div> : (
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 text-sm p-4 rounded-lg border border-blue-100 dark:border-blue-800/50">
+                                در این بخش می‌توانید مشخص کنید که محصولات این دسته‌بندی چه ویژگی‌های اختصاصی باید داشته باشند.
+                            </div>
+                            <div className="max-h-[50vh] overflow-y-auto p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-200 dark:border-gray-700">
+                                {allAttributes.length === 0 ? <p className="text-center text-gray-500 py-4">هیچ ویژگی تعریف نشده است. ابتدا از تب ویژگی‌ها اضافه کنید.</p> : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                        {allAttributes.map(attr => (
+                                            <label key={attr.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedAttributes.includes(attr.id) ? 'bg-indigo-50 border-indigo-200 dark:bg-indigo-900/30 dark:border-indigo-700/50 shadow-sm' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedAttributes.includes(attr.id)}
+                                                    onChange={() => handleToggle(attr.id)}
+                                                    className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500 dark:focus:ring-indigo-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                                />
+                                                <span className={`text-sm font-medium ${selectedAttributes.includes(attr.id) ? 'text-indigo-800 dark:text-indigo-300' : 'text-gray-700 dark:text-gray-300'}`}>{attr.title}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button type="button" onClick={onClose} className="px-5 py-2.5 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white rounded-lg text-sm font-bold transition-colors">انصراف</button>
+                                <button type="submit" disabled={isSubmitting} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-50 transition-colors">
+                                    {isSubmitting && <div className="spinner !w-4 !h-4 !border-t-white"></div>}
+                                    ذخیره ویژگی‌ها
+                                </button>
+                            </div>
+                        </form>
+                    )}
+                </Modal>
+            );
+        };
+
+
         const ProductCard = ({ product, onOpenDetails, onOpenEdit }) => {
-            const telegramCode = product.productproperty?.find(p => p.propertykey?.title === 'کد کالا (تلگرام)')?.value || '-';
+            const telegramCode = (product.productproperty || []).find(p => p.propertykey?.title === 'کد کالا (تلگرام)')?.value || '-';
             return (
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 space-y-4 border border-gray-200 dark:border-gray-700 transition-shadow hover:shadow-md">
                     <div className="flex gap-3">
@@ -447,8 +663,8 @@
                             <div className="flex justify-between items-center">
                                 <span className="text-gray-500 dark:text-gray-400 text-xs">وضعیت تامین</span>
                                 <div className="font-medium">
-                                    {product.supplierstock?.length > 0 ? 
-                                        <span className="px-2.5 py-1 text-xs rounded-md bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300 font-medium">دارد ({product.supplierstock.length} تامین‌کننده)</span> :
+                                    {(product.supplierstock || []).length > 0 ? 
+                                        <span className="px-2.5 py-1 text-xs rounded-md bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300 font-medium">دارد ({(product.supplierstock || []).length} تامین‌کننده)</span> :
                                         <span className="px-2.5 py-1 text-xs rounded-md bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300 font-medium">ندارد</span>
                                     }
                                 </div>
@@ -457,10 +673,10 @@
                     </div>
 
                     <div className="flex gap-3 pt-2">
-                        <button onClick={onOpenDetails} className="w-full text-center py-2 px-3 rounded-lg text-sm font-semibold bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-green-600 dark:text-green-400 transition-colors">
+                        <button onClick={() => onOpenDetails(product)} className="w-full flex justify-center items-center gap-1.5 text-center py-2 px-3 rounded-lg text-sm font-semibold bg-green-50 text-green-600 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50 transition-colors border border-green-200 dark:border-green-800/50">
                             جزئیات و انبارها
                         </button>
-                        <button onClick={onOpenEdit} className="w-full text-center py-2 px-3 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white transition-colors shadow-sm">
+                        <button onClick={() => onOpenEdit(product)} className="w-full flex justify-center items-center gap-1.5 text-center py-2 px-3 rounded-lg text-sm font-semibold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-400 dark:hover:bg-indigo-900/50 transition-colors shadow-sm border border-indigo-200 dark:border-indigo-800/50">
                             ویرایش محصول
                         </button>
                     </div>
@@ -469,9 +685,8 @@
         };
 
         // ==================================================
-        // App Components
+        // Main Components
         // ==================================================
-        
         const PriceUpdatesManager = ({ onOpenProductDetails }) => {
             const [updates, setUpdates] = React.useState([]);
             const [isLoading, setIsLoading] = React.useState(false);
@@ -606,7 +821,7 @@
                                             <td className="p-3 font-mono text-center">{upd.quantity != null ? upd.quantity : '-'}</td>
                                             <td className="p-3 font-mono text-indigo-600 dark:text-indigo-400" dir="ltr" style={{textAlign: 'right'}}>{toJalaaliDateTime(upd.lastupdatedat)}</td>
                                             <td className="p-3 text-center">
-                                                <button onClick={() => onOpenProductDetails(upd.product?.id)} className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors">
+                                                <button onClick={() => onOpenProductDetails(upd.product?.id)} className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors border border-gray-200 dark:border-gray-600">
                                                     بررسی و ویرایش
                                                 </button>
                                             </td>
@@ -622,232 +837,6 @@
                             مجموع: {totalItems} مورد به‌روز شده
                         </div>
                         <Pagination currentPage={currentPage} totalPages={Math.ceil(totalItems / itemsPerPage)} onPageChange={setCurrentPage} />
-                    </div>
-                </div>
-            );
-        };
-
-        const ConnectProductModal = ({ isOpen, onClose, item, allProducts, allBrands, categories, targetStatusId, onConnected }) => {
-            const { addToast } = useToasts();
-            const [mode, setMode] = React.useState('existing'); 
-            const [selectedProductId, setSelectedProductId] = React.useState('');
-            
-            const [newTitle, setNewTitle] = React.useState('');
-            const [newBrandId, setNewBrandId] = React.useState('');
-            const [newCategoryId, setNewCategoryId] = React.useState('');
-            const [isSubmitting, setIsSubmitting] = React.useState(false);
-
-            React.useEffect(() => {
-                if (item) {
-                    setNewTitle(item.unregistered_product_title || '');
-                    setSelectedProductId('');
-                    setMode('existing');
-                    setNewBrandId('');
-                    setNewCategoryId('');
-                }
-            }, [item]);
-
-            if (!isOpen || !item) return null;
-
-            const handleSubmit = async (e) => {
-                e.preventDefault();
-                setIsSubmitting(true);
-                
-                try {
-                    let finalProductId = null;
-
-                    if (mode === 'existing') {
-                        if (!selectedProductId) throw new Error("لطفا یک محصول را از لیست انتخاب کنید.");
-                        finalProductId = selectedProductId;
-                    } else {
-                        if (!newTitle.trim()) throw new Error("لطفا نام محصول را وارد کنید.");
-                        if (!newCategoryId) throw new Error("لطفا دسته‌بندی محصول را انتخاب کنید.");
-                        
-                        const { data: newProd, error: prodErr } = await supabaseClient
-                            .from('product')
-                            .insert({
-                                title: newTitle.trim(),
-                                productcategoryid: newCategoryId,
-                                brandid: newBrandId || null,
-                                image_url: item.unregistered_product_image_url || null, 
-                                isdeleted: false
-                            })
-                            .select()
-                            .single();
-                            
-                        if (prodErr) throw prodErr;
-                        finalProductId = newProd.id;
-                    }
-
-                    const updatePayload = {
-                        productid: finalProductId,
-                        unregistered_product_title: null, 
-                        unregistered_product_image_url: null
-                    };
-
-                    if (targetStatusId) {
-                        updatePayload.demandstatusid = targetStatusId;
-                    }
-
-                    const { error: updateErr } = await supabaseClient
-                        .from('demand_item')
-                        .update(updatePayload)
-                        .eq('id', item.id);
-                        
-                    if (updateErr) throw updateErr;
-
-                    if (targetStatusId) {
-                        await supabaseClient.from('demandstatuslog').insert({
-                            demand_item_id: item.id,
-                            demandstatusid: targetStatusId
-                        });
-                        await supabaseClient.from('demand_item_log').insert({ 
-                            demand_item_id: item.id, 
-                            change_description: `کالا توسط مدیر محصول تایید و به سیستم متصل شد.` 
-                        });
-                    }
-
-                    addToast("کالا با موفقیت متصل و بروزرسانی شد.", "success");
-                    onConnected();
-                } catch (err) {
-                    console.error(err);
-                    addToast(err.message || "خطا در برقراری ارتباط.", "error");
-                } finally {
-                    setIsSubmitting(false);
-                }
-            };
-
-            const productOptions = allProducts.map(p => ({
-                id: p.id,
-                title: `(ID: ${p.id}) ${p.brand?.title ? p.brand.title + ' ' : ''}${p.title}`,
-                image: p.image_url
-            }));
-
-            const brandOptions = allBrands.map(b => ({ id: b.id, title: b.title }));
-            const categoryOptions = categories.map(c => ({ id: c.id, title: c.title }));
-
-            return (
-                <div className="modal-overlay open" onClick={onClose}>
-                    <div className="modal-content bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 flex flex-col md:flex-row gap-6 p-0 overflow-hidden" onClick={e => e.stopPropagation()}>
-                        
-                        <div className="w-full md:w-1/3 bg-yellow-50 dark:bg-yellow-900/10 p-6 border-b md:border-b-0 md:border-l border-yellow-100 dark:border-yellow-800/30 flex flex-col items-center text-center">
-                            <h3 className="text-sm font-bold text-yellow-800 dark:text-yellow-500 mb-4 w-full text-right flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                اطلاعات ثبت شده (موقت)
-                            </h3>
-                            
-                            <div className="w-32 h-32 mb-4 rounded-xl overflow-hidden border-4 border-white dark:border-gray-700 shadow-md bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                                {item.unregistered_product_image_url ? (
-                                    <img src={item.unregistered_product_image_url} alt="" className="w-full h-full object-cover" />
-                                ) : (
-                                    <span className="text-gray-400 text-xs">بدون تصویر</span>
-                                )}
-                            </div>
-                            
-                            <h4 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2 leading-tight">
-                                {item.unregistered_product_title}
-                            </h4>
-                            
-                            <div className="w-full mt-4 space-y-3 text-sm text-right">
-                                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border border-yellow-100 dark:border-yellow-700/30">
-                                    <span className="block text-xs text-gray-500 dark:text-gray-400 mb-1">تعداد درخواستی:</span>
-                                    <span className="font-bold text-lg font-mono text-indigo-600 dark:text-indigo-400">{item.quantity} عدد</span>
-                                </div>
-                                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border border-yellow-100 dark:border-yellow-700/30">
-                                    <span className="block text-xs text-gray-500 dark:text-gray-400 mb-1">مشتری متقاضی:</span>
-                                    <span className="font-semibold text-gray-700 dark:text-gray-300">{item.demand?.profiles?.fullname || 'نامشخص'}</span>
-                                </div>
-                                {item.demand_admin_note && (
-                                    <div className="bg-yellow-100/50 dark:bg-yellow-900/30 p-3 rounded-lg text-xs text-yellow-800 dark:text-yellow-400">
-                                        <strong className="block mb-1">یادداشت مدیر تقاضا:</strong>
-                                        {item.demand_admin_note}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="w-full md:w-2/3 p-6">
-                            <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-xl font-bold text-gray-800 dark:text-white">تعیین تکلیف کالا</h2>
-                                <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-800 dark:hover:text-white text-2xl">&times;</button>
-                            </div>
-
-                            <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-lg mb-6">
-                                <button type="button" onClick={() => setMode('existing')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${mode === 'existing' ? 'bg-white dark:bg-gray-600 shadow text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
-                                    انتخاب از کالاهای سیستم
-                                </button>
-                                <button type="button" onClick={() => setMode('new')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${mode === 'new' ? 'bg-white dark:bg-gray-600 shadow text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
-                                    + تعریف کالای کاملاً جدید
-                                </button>
-                            </div>
-
-                            <form onSubmit={handleSubmit} className="space-y-6">
-                                {mode === 'existing' ? (
-                                    <div className="animate-toast-in space-y-4">
-                                        <div className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-800 dark:text-indigo-300 text-sm p-4 rounded-lg border border-indigo-100 dark:border-indigo-800/50 leading-relaxed">
-                                            اگر فکر می‌کنید این کالا هم‌اکنون در سیستم وجود دارد، آن را از لیست زیر جستجو و انتخاب کنید تا این درخواست به آن کالا متصل شود.
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">جستجوی محصول موجود</label>
-                                            <SearchableSelect 
-                                                options={productOptions} 
-                                                value={selectedProductId} 
-                                                onChange={setSelectedProductId} 
-                                                placeholder="نام یا کد محصول را جستجو کنید..." 
-                                            />
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="animate-toast-in space-y-4">
-                                        <div className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-800 dark:text-indigo-300 text-sm p-4 rounded-lg border border-indigo-100 dark:border-indigo-800/50 leading-relaxed">
-                                            با پر کردن فرم زیر، یک کالای جدید ایجاد شده و عکس موقت به آن منتقل می‌شود. سپس این تقاضا به صورت خودکار به کالای جدید متصل می‌گردد.
-                                        </div>
-                                        
-                                        <div>
-                                            <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">نام استاندارد محصول *</label>
-                                            <input 
-                                                type="text" 
-                                                value={newTitle} 
-                                                onChange={e => setNewTitle(e.target.value)} 
-                                                className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" 
-                                                placeholder="مثلا: اسپیکر بلوتوثی KTS مدل 1626" 
-                                                required={mode === 'new'} 
-                                            />
-                                        </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">دسته‌بندی *</label>
-                                                <SearchableSelect 
-                                                    options={categoryOptions} 
-                                                    value={newCategoryId} 
-                                                    onChange={setNewCategoryId} 
-                                                    placeholder="انتخاب دسته‌بندی..." 
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">برند (اختیاری)</label>
-                                                <SearchableSelect 
-                                                    options={brandOptions} 
-                                                    value={newBrandId} 
-                                                    onChange={setNewBrandId} 
-                                                    placeholder="انتخاب برند..." 
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="pt-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
-                                    <button type="button" onClick={onClose} className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
-                                        انصراف
-                                    </button>
-                                    <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 text-sm font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors flex items-center gap-2 disabled:bg-indigo-400">
-                                        {isSubmitting ? <span className="spinner !w-4 !h-4 !border-t-white"></span> : null}
-                                        تایید و اتصال
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
                     </div>
                 </div>
             );
@@ -958,7 +947,7 @@
                                     <div className="p-5 flex-1 flex flex-col">
                                         <div className="text-xs text-gray-400 mb-2 flex justify-between items-center">
                                             <span>{timeAgo(item.createdat)}</span>
-                                            <span className="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">ID: {item.id}</span>
+                                            <span className="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-600">ID: {item.id}</span>
                                         </div>
                                         
                                         <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-4 line-clamp-2" title={item.unregistered_product_title}>
@@ -966,11 +955,11 @@
                                         </h3>
                                         
                                         <div className="space-y-2 mt-auto">
-                                            <div className="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-700/50 p-2 rounded">
+                                            <div className="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-transparent dark:border-gray-600">
                                                 <span className="text-gray-500 dark:text-gray-400">مشتری متقاضی:</span>
                                                 <span className="font-semibold text-gray-700 dark:text-gray-200 truncate pl-2 max-w-[150px]" title={item.demand?.profiles?.fullname}>{item.demand?.profiles?.fullname || 'نامشخص'}</span>
                                             </div>
-                                            <div className="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-700/50 p-2 rounded">
+                                            <div className="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-transparent dark:border-gray-600">
                                                 <span className="text-gray-500 dark:text-gray-400">تعداد درخواستی:</span>
                                                 <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded">{item.quantity} عدد</span>
                                             </div>
@@ -1008,6 +997,227 @@
                         }}
                     />
                 </div>
+            );
+        };
+
+        const ConnectProductModal = ({ isOpen, onClose, item, allProducts, allBrands, categories, targetStatusId, onConnected }) => {
+            const { addToast } = useToasts();
+            const [mode, setMode] = React.useState('existing'); 
+            const [selectedProductId, setSelectedProductId] = React.useState('');
+            
+            const [newTitle, setNewTitle] = React.useState('');
+            const [newBrandId, setNewBrandId] = React.useState('');
+            const [newCategoryId, setNewCategoryId] = React.useState('');
+            const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+            React.useEffect(() => {
+                if (item) {
+                    setNewTitle(item.unregistered_product_title || '');
+                    setSelectedProductId('');
+                    setMode('existing');
+                    setNewBrandId('');
+                    setNewCategoryId('');
+                }
+            }, [item]);
+
+            if (!isOpen || !item) return null;
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setIsSubmitting(true);
+                
+                try {
+                    let finalProductId = null;
+
+                    if (mode === 'existing') {
+                        if (!selectedProductId) throw new Error("لطفا یک محصول را از لیست انتخاب کنید.");
+                        finalProductId = selectedProductId;
+                    } else {
+                        if (!newTitle.trim()) throw new Error("لطفا نام محصول را وارد کنید.");
+                        if (!newCategoryId) throw new Error("لطفا دسته‌بندی محصول را انتخاب کنید.");
+                        
+                        const { data: newProd, error: prodErr } = await supabaseClient
+                            .from('product')
+                            .insert({
+                                title: newTitle.trim(),
+                                productcategoryid: newCategoryId,
+                                brandid: newBrandId || null,
+                                image_url: item.unregistered_product_image_url || null, 
+                                isdeleted: false
+                            })
+                            .select()
+                            .single();
+                            
+                        if (prodErr) throw prodErr;
+                        finalProductId = newProd.id;
+                    }
+
+                    const updatePayload = {
+                        productid: finalProductId,
+                        unregistered_product_title: null, 
+                        unregistered_product_image_url: null
+                    };
+
+                    if (targetStatusId) {
+                        updatePayload.demandstatusid = targetStatusId;
+                    }
+
+                    const { error: updateErr } = await supabaseClient
+                        .from('demand_item')
+                        .update(updatePayload)
+                        .eq('id', item.id);
+                        
+                    if (updateErr) throw updateErr;
+
+                    if (targetStatusId) {
+                        await supabaseClient.from('demandstatuslog').insert({
+                            demand_item_id: item.id,
+                            demandstatusid: targetStatusId
+                        });
+                        await supabaseClient.from('demand_item_log').insert({ 
+                            demand_item_id: item.id, 
+                            change_description: `کالا توسط مدیر محصول تایید و به سیستم متصل شد.` 
+                        });
+                    }
+
+                    addToast("کالا با موفقیت متصل و بروزرسانی شد.", "success");
+                    onConnected();
+                } catch (err) {
+                    console.error(err);
+                    addToast(err.message || "خطا در برقراری ارتباط.", "error");
+                } finally {
+                    setIsSubmitting(false);
+                }
+            };
+
+            const productOptions = (allProducts || []).map(p => ({
+                id: p.id,
+                title: `(ID: ${p.id}) ${p.brand?.title ? p.brand.title + ' ' : ''}${p.title}`,
+                image: p.image_url
+            }));
+
+            const brandOptions = (allBrands || []).map(b => ({ id: b.id, title: b.title }));
+            const categoryOptions = (categories || []).map(c => ({ id: c.id, title: c.title }));
+
+            return (
+                <Modal isOpen={isOpen} onClose={onClose} title="تعیین تکلیف کالای درخواستی">
+                    <div className="flex flex-col md:flex-row gap-6 p-0 overflow-hidden">
+                        
+                        <div className="w-full md:w-1/3 bg-yellow-50 dark:bg-yellow-900/10 p-6 border-b md:border-b-0 md:border-l border-yellow-100 dark:border-yellow-800/30 flex flex-col items-center text-center">
+                            <h3 className="text-sm font-bold text-yellow-800 dark:text-yellow-500 mb-4 w-full text-right flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                اطلاعات ثبت شده (موقت)
+                            </h3>
+                            
+                            <div className="w-32 h-32 mb-4 rounded-xl overflow-hidden border-4 border-white dark:border-gray-700 shadow-md bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                                {item.unregistered_product_image_url ? (
+                                    <img src={item.unregistered_product_image_url} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                    <span className="text-gray-400 text-xs">بدون تصویر</span>
+                                )}
+                            </div>
+                            
+                            <h4 className="font-bold text-lg text-gray-800 dark:text-gray-100 mb-2 leading-tight">
+                                {item.unregistered_product_title}
+                            </h4>
+                            
+                            <div className="w-full mt-4 space-y-3 text-sm text-right">
+                                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border border-yellow-100 dark:border-yellow-700/30">
+                                    <span className="block text-xs text-gray-500 dark:text-gray-400 mb-1">تعداد درخواستی:</span>
+                                    <span className="font-bold text-lg font-mono text-indigo-600 dark:text-indigo-400">{item.quantity} عدد</span>
+                                </div>
+                                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm border border-yellow-100 dark:border-yellow-700/30">
+                                    <span className="block text-xs text-gray-500 dark:text-gray-400 mb-1">مشتری متقاضی:</span>
+                                    <span className="font-semibold text-gray-700 dark:text-gray-300">{item.demand?.profiles?.fullname || 'نامشخص'}</span>
+                                </div>
+                                {item.demand_admin_note && (
+                                    <div className="bg-yellow-100/50 dark:bg-yellow-900/30 p-3 rounded-lg text-xs text-yellow-800 dark:text-yellow-400">
+                                        <strong className="block mb-1">یادداشت مدیر تقاضا:</strong>
+                                        {item.demand_admin_note}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="w-full md:w-2/3 p-6">
+                            <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-lg mb-6">
+                                <button type="button" onClick={() => setMode('existing')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${mode === 'existing' ? 'bg-white dark:bg-gray-600 shadow text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+                                    انتخاب از کالاهای سیستم
+                                </button>
+                                <button type="button" onClick={() => setMode('new')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${mode === 'new' ? 'bg-white dark:bg-gray-600 shadow text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+                                    + تعریف کالای کاملاً جدید
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleSubmit} className="space-y-6">
+                                {mode === 'existing' ? (
+                                    <div className="animate-toast-in space-y-4">
+                                        <div className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-800 dark:text-indigo-300 text-sm p-4 rounded-lg border border-indigo-100 dark:border-indigo-800/50 leading-relaxed">
+                                            اگر فکر می‌کنید این کالا هم‌اکنون در سیستم وجود دارد، آن را از لیست زیر جستجو و انتخاب کنید تا این درخواست به آن کالا متصل شود.
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">جستجوی محصول موجود</label>
+                                            <SearchableSelect 
+                                                options={productOptions} 
+                                                value={selectedProductId} 
+                                                onChange={setSelectedProductId} 
+                                                placeholder="نام یا کد محصول را جستجو کنید..." 
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="animate-toast-in space-y-4">
+                                        <div className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-800 dark:text-indigo-300 text-sm p-4 rounded-lg border border-indigo-100 dark:border-indigo-800/50 leading-relaxed">
+                                            با پر کردن فرم زیر، یک کالای جدید ایجاد شده و عکس موقت به آن منتقل می‌شود. سپس این تقاضا به صورت خودکار به کالای جدید متصل می‌گردد.
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">نام استاندارد محصول *</label>
+                                            <input 
+                                                type="text" 
+                                                value={newTitle} 
+                                                onChange={e => setNewTitle(e.target.value)} 
+                                                className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" 
+                                                placeholder="مثلا: اسپیکر بلوتوثی KTS مدل 1626" 
+                                                required={mode === 'new'} 
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">دسته‌بندی *</label>
+                                                <SearchableSelect 
+                                                    options={categoryOptions} 
+                                                    value={newCategoryId} 
+                                                    onChange={setNewCategoryId} 
+                                                    placeholder="انتخاب دسته‌بندی..." 
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">برند (اختیاری)</label>
+                                                <SearchableSelect 
+                                                    options={brandOptions} 
+                                                    value={newBrandId} 
+                                                    onChange={setNewBrandId} 
+                                                    placeholder="انتخاب برند..." 
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="pt-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                                    <button type="button" onClick={onClose} className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+                                        انصراف
+                                    </button>
+                                    <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 text-sm font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors flex items-center gap-2 disabled:bg-indigo-400">
+                                        {isSubmitting ? <span className="spinner !border-t-white"></span> : null}
+                                        تایید و اتصال
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </Modal>
             );
         };
 
@@ -1055,7 +1265,7 @@
                     .select('propertykey(id, title)')
                     .eq('category_id', categoryId);
                 if (error) console.error("Error fetching category properties:", error);
-                else setProperties(data.map(item => item.propertykey));
+                else setProperties((data || []).map(item => item.propertykey));
             };
             
             const fetchProductProperties = async (productId) => {
@@ -1065,7 +1275,7 @@
                     .eq('productid', productId);
                 if(error) console.error("Error fetching product properties:", error);
                 else {
-                    const values = data.reduce((acc, curr) => {
+                    const values = (data || []).reduce((acc, curr) => {
                         acc[curr.propertykeyid] = curr.value;
                         return acc;
                     }, {});
@@ -1197,12 +1407,7 @@
                                         type="file" 
                                         accept="image/*"
                                         onChange={handleImageChange}
-                                        className="w-full text-sm text-gray-500
-                                        file:mr-4 file:py-2 file:px-4
-                                        file:rounded-full file:border-0
-                                        file:text-sm file:font-semibold
-                                        file:bg-indigo-50 file:text-indigo-700
-                                        hover:file:bg-indigo-100 dark:file:bg-gray-700 dark:file:text-indigo-300"
+                                        className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-gray-700 dark:file:text-indigo-300 cursor-pointer"
                                     />
                                     <p className="text-xs text-gray-500 mt-1">فرمت‌های مجاز: JPG, PNG. حداکثر 100 KB.</p>
                                 </div>
@@ -1264,8 +1469,9 @@
                 </Modal>
             );
         };
-        
+
         const ProductDetailsModal = ({ isOpen, onClose, product, onSave }) => {
+            const { addToast } = useToasts();
             const [localSuppliers, setLocalSuppliers] = React.useState([]);
             const [showAddForm, setShowAddForm] = React.useState(false);
             
@@ -1300,7 +1506,7 @@
                             
                             if (error) throw error;
 
-                            const options = data.map(ul => ({
+                            const options = (data || []).map(ul => ({
                                 id: `${ul.location.id}|${ul.profiles.id}`,
                                 title: `انبار (کد: ${ul.location.id})`
                             }));
@@ -1391,9 +1597,10 @@
                     newSuppliers[index].isDirty = false;
                     setLocalSuppliers(newSuppliers);
                     if(onSave) onSave();
+                    addToast("بروزرسانی با موفقیت انجام شد.", "success");
                 } catch (err) {
                     console.error("Update error:", err);
-                    alert('خطا در بروزرسانی: ' + err.message);
+                    addToast('خطا در بروزرسانی: ' + err.message, "error");
                 } finally {
                     setIsUpdatingRow(null);
                 }
@@ -1499,7 +1706,7 @@
                                     {stockError && <p className="text-red-500 text-xs mt-2">{stockError}</p>}
                                     <div className="flex justify-end mt-3">
                                         <button type="submit" disabled={isSubmittingStock} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50 flex items-center gap-2">
-                                            {isSubmittingStock && <div className="spinner !w-3 !h-3 !border-t-white"></div>}
+                                            {isSubmittingStock && <div className="spinner !border-t-white"></div>}
                                             {isSubmittingStock ? 'در حال ثبت...' : 'ثبت موجودی'}
                                         </button>
                                     </div>
@@ -1508,7 +1715,7 @@
 
                             <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
                                 {localSuppliers.length > 0 ? localSuppliers.map((stock, index) => (
-                                    <div key={`${stock.supplieruserid}-${stock.location_id || stock.location?.id || index}`} className="p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg flex flex-col sm:flex-row justify-between sm:items-center gap-4 border border-transparent dark:border-gray-700">
+                                    <div key={`${stock.supplieruserid}-${stock.location_id || stock.location?.id || index}`} className="p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg flex flex-col sm:flex-row justify-between sm:items-center gap-4 border border-transparent dark:border-gray-700 hover:border-gray-200 dark:hover:border-gray-600">
                                         <div className="flex-shrink-0">
                                             <span className="text-xs text-gray-500 dark:text-gray-400 block mb-0.5">موجودی انبار</span>
                                             <p className="font-semibold text-sm">
@@ -1570,150 +1777,13 @@
             );
         };
 
-        const GenericManager = ({ onSave, title, tableName, items: initialItems, confirmModal, onManageAttributes, attributeLabel }) => {
-            const [items, setItems] = React.useState(initialItems);
-            const [newItemName, setNewItemName] = React.useState('');
-            const [editingItem, setEditingItem] = React.useState(null);
-            const [isLoading, setIsLoading] = React.useState(false);
-            const [error, setError] = React.useState('');
-
-            React.useEffect(() => { setItems(initialItems); }, [initialItems]);
-
-            const handleAddItem = async (e) => {
-                e.preventDefault();
-                if (!newItemName.trim()) return;
-                setIsLoading(true);
-                setError('');
-
-                const { data, error } = await supabaseClient.from(tableName).insert({ title: newItemName.trim() }).select().single();
-                if (error) {
-                    setError(`خطا در افزودن: ${error.message}`);
-                } else {
-                    setItems(prev => [...prev, data]);
-                    setNewItemName('');
-                    onSave();
-                }
-                setIsLoading(false);
-            };
-
-            const handleUpdateItem = async () => {
-                if (!editingItem || !editingItem.title.trim()) return;
-                setIsLoading(true);
-                setError('');
-
-                const { error } = await supabaseClient.from(tableName).update({ title: editingItem.title.trim() }).eq('id', editingItem.id);
-                if (error) {
-                    setError(`خطا در به‌روزرسانی: ${error.message}`);
-                } else {
-                    setItems(prev => prev.map(item => item.id === editingItem.id ? editingItem : item));
-                    setEditingItem(null);
-                    onSave();
-                }
-                setIsLoading(false);
-            };
-
-            const requestDeleteItem = (item) => {
-                confirmModal({
-                    isOpen: true,
-                    message: `آیا از حذف "${item.title}" اطمینان دارید؟ این عمل ممکن است باعث خطا در موارد مرتبط شود.`,
-                    onConfirm: () => executeDeleteItem(item.id)
-                });
-            };
-
-            const executeDeleteItem = async (itemId) => {
-                setIsLoading(true);
-                setError('');
-                const { error } = await supabaseClient.from(tableName).delete().eq('id', itemId);
-                if (error) {
-                    setError(`خطا در حذف. ممکن است این مورد توسط آیتم دیگری استفاده شده باشد.`);
-                } else {
-                    setItems(prev => prev.filter(item => item.id !== itemId));
-                    onSave();
-                }
-                setIsLoading(false);
-            };
-            
-            return (
-                <div className="space-y-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow border border-gray-200 dark:border-gray-700">
-                    <h2 className="text-xl font-bold mb-4">{`لیست ${title}`}</h2>
-                    <form onSubmit={handleAddItem} className="flex gap-2">
-                        <input type="text" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} placeholder={`افزودن ${title} جدید...`} className="flex-grow bg-gray-100 dark:bg-gray-700 p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                        <button type="submit" disabled={isLoading} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg disabled:bg-green-400">افزودن</button>
-                    </form>
-                    {error && <p className="text-red-500 text-sm">{error}</p>}
-                    <div className="max-h-96 overflow-y-auto space-y-2 pr-2">
-                        {items.map(item => (
-                            <div key={item.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-transparent dark:border-gray-600 hover:border-gray-200">
-                                {editingItem?.id === item.id ? (
-                                    <input type="text" value={editingItem.title} onChange={(e) => setEditingItem({ ...editingItem, title: e.target.value })} className="flex-grow bg-white dark:bg-gray-600 p-1 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-indigo-500" autoFocus onBlur={handleUpdateItem} onKeyDown={e => e.key === 'Enter' && handleUpdateItem()} />
-                                ) : ( <span className="text-gray-800 dark:text-gray-200 font-medium">{item.title}</span> )}
-                                <div className="flex-shrink-0 flex flex-wrap gap-x-2 gap-y-1 sm:space-x-reverse w-full sm:w-auto justify-end">
-                                    {onManageAttributes && (<button onClick={() => onManageAttributes(item)} className="text-sm text-green-600 dark:text-green-400 hover:underline">{attributeLabel || 'مدیریت'}</button>)}
-                                    {editingItem?.id === item.id ? (<button onClick={() => setEditingItem(null)} className="text-sm text-gray-500 hover:underline">لغو</button>) : (<button onClick={() => setEditingItem(item)} className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">ویرایش</button>)}
-                                    <button onClick={() => requestDeleteItem(item)} disabled={isLoading} className="text-sm text-red-500 hover:underline">حذف</button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            );
-        };
-        
-        const AssignAttributesModal = ({ isOpen, onClose, category, allAttributes, onSave }) => {
-            const [selectedAttributes, setSelectedAttributes] = React.useState(new Set());
-            const [isLoading, setIsLoading] = React.useState(true);
-
-            React.useEffect(() => {
-                if (isOpen) {
-                    setIsLoading(true);
-                    supabaseClient.from('category_propertykey').select('propertykey_id').eq('category_id', category.id)
-                        .then(({ data, error }) => {
-                            if(error) console.error(error);
-                            else { setSelectedAttributes(new Set(data.map(item => item.propertykey_id))); }
-                            setIsLoading(false);
-                        });
-                }
-            }, [isOpen, category]);
-
-            const handleToggle = (attributeId) => {
-                setSelectedAttributes(prev => { const newSet = new Set(prev); if (newSet.has(attributeId)) { newSet.delete(attributeId); } else { newSet.add(attributeId); } return newSet; });
-            };
-
-            const handleSave = async () => {
-                setIsLoading(true);
-                await supabaseClient.from('category_propertykey').delete().eq('category_id', category.id);
-                const toInsert = Array.from(selectedAttributes).map(propId => ({ category_id: category.id, propertykey_id: propId }));
-                if (toInsert.length > 0) { await supabaseClient.from('category_propertykey').insert(toInsert); }
-                onSave();
-                onClose();
-            };
-
-            return (
-                <Modal isOpen={isOpen} onClose={onClose} title={`مدیریت ویژگی‌های دسته‌بندی: ${category?.title}`}>
-                    {isLoading ? <div className="flex justify-center p-6"><div className="spinner !border-t-indigo-600"></div></div> : (
-                        <div className="space-y-2 max-h-96 overflow-y-auto">
-                            {allAttributes.map(attr => (
-                                <label key={attr.id} className="flex items-center p-3 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors border border-transparent dark:border-gray-700">
-                                    <input type="checkbox" className="ml-3 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" checked={selectedAttributes.has(attr.id)} onChange={() => handleToggle(attr.id)} />
-                                    <span className="font-medium text-gray-800 dark:text-gray-200">{attr.title}</span>
-                                </label>
-                            ))}
-                        </div>
-                    )}
-                    <div className="flex justify-end gap-3 pt-4 mt-4 border-t border-gray-200 dark:border-gray-600">
-                        <button onClick={onClose} className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white py-2 px-4 rounded-lg">انصراف</button>
-                        <button onClick={handleSave} disabled={isLoading} className="bg-indigo-600 text-white py-2 px-4 rounded-lg disabled:bg-indigo-400">ذخیره تغییرات</button>
-                    </div>
-                </Modal>
-            );
-        };
-        
         const ProductManagerDashboard = ({ toggleTheme, theme }) => {
             const { addToast } = useToasts();
             const [products, setProducts] = React.useState([]);
             const [appData, setAppData] = React.useState({ categories: [], brands: [], propertyKeys: [] });
             const [isLoading, setIsLoading] = React.useState(true);
             const [activeTab, setActiveTab] = React.useState('pending_requests');
+            const [targetStatusId, setTargetStatusId] = React.useState(null);
 
             const [searchTerm, setSearchTerm] = React.useState('');
             const [categoryFilter, setCategoryFilter] = React.useState('');
@@ -1732,16 +1802,20 @@
             const [viewingProduct, setViewingProduct] = React.useState(null);
 
             const fetchBaseData = async () => {
-                const [categoryRes, brandRes, propKeyRes] = await Promise.all([
+                const [categoryRes, brandRes, propKeyRes, statusRes] = await Promise.all([
                     supabaseClient.from('productcategory').select('*').order('title'),
                     supabaseClient.from('brand').select('*').order('title'),
-                    supabaseClient.from('propertykey').select('*').order('title')
+                    supabaseClient.from('propertykey').select('*').order('title'),
+                    supabaseClient.from('demandstatustype').select('id').eq('title_farsi', 'در انتظار تامین').maybeSingle()
                 ]);
                 setAppData({ 
                     categories: categoryRes.data || [], 
                     brands: brandRes.data || [],
                     propertyKeys: propKeyRes.data || []
                 });
+                if (statusRes && statusRes.data) {
+                    setTargetStatusId(statusRes.data.id);
+                }
             };
 
             const fetchProducts = React.useCallback(async () => {
@@ -1863,12 +1937,21 @@
                                 <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">پورتال متمرکز تیم تامین و دسته‌بندی</p>
                             </div>
                         </div>
-                        {activeTab === 'products' && (
-                            <button onClick={() => handleOpenProductModal()} className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
-                                تعریف محصول جدید
+                        <div className="flex items-center gap-3">
+                            <button onClick={toggleTheme} className="p-2 rounded-full text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:text-gray-400 dark:hover:text-indigo-400 dark:hover:bg-gray-700 transition" title="تغییر تم">
+                                {theme === 'light' ? (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                                ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                                )}
                             </button>
-                        )}
+                            {activeTab === 'products' && (
+                                <button onClick={() => handleOpenProductModal()} className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
+                                    تعریف محصول جدید
+                                </button>
+                            )}
+                        </div>
                     </div>
                     
                     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 mb-6 overflow-hidden">
@@ -1896,6 +1979,7 @@
                                 <PendingRequestsManager 
                                     allBrands={appData.brands} 
                                     categories={appData.categories}
+                                    targetStatusId={targetStatusId}
                                 />
                             )}
 
@@ -1932,7 +2016,7 @@
                                                     <th className="p-3">برند</th>
                                                     <th className="p-3">وضعیت تامین</th>
                                                     <SortableHeader columnKey="createdat">تاریخ ثبت</SortableHeader>
-                                                    <th className="p-3 rounded-tl-lg">عملیات</th>
+                                                    <th className="p-3 rounded-tl-lg text-center">عملیات</th>
                                                 </tr>
                                             </thead>
                                             {isLoading ? <TableSkeleton /> : (
@@ -1941,7 +2025,7 @@
                                                         <tr><td colSpan="9" className="text-center py-10 text-gray-500">محصولی با این فیلترها یافت نشد.</td></tr>
                                                     ) : (
                                                         products.map(product => {
-                                                            const telegramCode = product.productproperty.find(p => p.propertykey?.title === 'کد کالا (تلگرام)')?.value || '-';
+                                                            const telegramCode = (product.productproperty || []).find(p => p.propertykey?.title === 'کد کالا (تلگرام)')?.value || '-';
                                                             return (
                                                                 <tr key={product.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
                                                                     <td className="p-3">
@@ -1955,16 +2039,16 @@
                                                                     <td className="p-3 text-gray-700 dark:text-gray-300">{product.productcategory?.title || '-'}</td>
                                                                     <td className="p-3 text-gray-600 dark:text-gray-400">{product.brand?.title || '-'}</td>
                                                                     <td className="p-3">
-                                                                        {product.supplierstock.length > 0 ? 
-                                                                            <span className="px-2.5 py-1 text-xs rounded-md bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300 font-medium">دارد ({product.supplierstock.length})</span> :
+                                                                        {(product.supplierstock || []).length > 0 ? 
+                                                                            <span className="px-2.5 py-1 text-xs rounded-md bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300 font-medium">دارد ({(product.supplierstock || []).length})</span> :
                                                                             <span className="px-2.5 py-1 text-xs rounded-md bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300 font-medium">ندارد</span>
                                                                         }
                                                                     </td>
                                                                     <td className="p-3 font-mono text-gray-500 text-xs">{toJalaali(product.createdat)}</td>
                                                                     <td className="p-3">
-                                                                        <div className="flex items-center gap-3">
-                                                                            <button onClick={() => handleOpenDetailsModal(product)} className="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 font-semibold transition-colors">جزئیات</button>
-                                                                            <button onClick={() => handleOpenProductModal(product)} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-semibold transition-colors">ویرایش</button>
+                                                                        <div className="flex items-center justify-center gap-2">
+                                                                            <button onClick={() => handleOpenDetailsModal(product)} className="bg-green-50 text-green-600 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors flex items-center gap-1 border border-green-200 dark:border-green-800/50">جزئیات</button>
+                                                                            <button onClick={() => handleOpenProductModal(product)} className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-400 dark:hover:bg-indigo-900/50 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors flex items-center gap-1 border border-indigo-200 dark:border-indigo-800/50">ویرایش</button>
                                                                         </div>
                                                                     </td>
                                                                 </tr>
@@ -2023,6 +2107,12 @@
                             {activeTab === 'attributes' && ( <div className="animate-toast-in"><GenericManager onSave={fetchBaseData} title="ویژگی" tableName="propertykey" items={appData.propertyKeys} confirmModal={setConfirmState}/></div> )}
                         </div>
                     </div>
+                    
+                    {/* Render Modals at the end of the Dashboard */}
+                    {isProductModalOpen && <ProductForm isOpen={isProductModalOpen} onClose={handleCloseProductModal} onSave={fetchProducts} product={editingProduct} appData={appData} />}
+                    {isDetailsModalOpen && <ProductDetailsModal isOpen={isDetailsModalOpen} onClose={handleCloseDetailsModal} product={viewingProduct} onSave={fetchProducts} />}
+                    {isAssignModalOpen && <AssignAttributesModal isOpen={isAssignModalOpen} onClose={() => setIsAssignModalOpen(false)} category={selectedCategory} allAttributes={appData.propertyKeys} onSave={fetchBaseData} />}
+                    <ConfirmModal isOpen={confirmState.isOpen} onClose={closeConfirmModal} onConfirm={confirmState.onConfirm} title="تایید عملیات" message={confirmState.message} />
                 </div>
             );
         };
